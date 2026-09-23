@@ -1,22 +1,31 @@
 {
   "product": "Nai2API",
-  "latestVersion": "1.0.0",
+  "latestVersion": "1.0.1",
   "updatedAt": "2026-09-23",
   "current": {
-    "title": "Nai2API 图像工作台上线",
+    "title": "Android 预览与保存修复",
     "content": [
-      "支持本地预设备份与恢复",
-      "支持风格库剪贴板导入",
-      "支持 NSFW 图片保护",
-      "增加版本迭代与更新公告机制"
+      "Android 生成图片支持双指放大和缩小，缩放范围为 0.5x 到 6x",
+      "修复 Android 端保存图片到本地不可用问题",
+      "增加系统分享和浏览器下载回退方式"
     ],
     "force": false,
     "windowsUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API-Windows.zip",
-    "androidUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API.apk",
     "windowsSha256": "1128e9a5ad38a70f35fae5c27cab48df04a19309caf1158e9c016f733d16e6f8",
-    "androidSha256": "d4760313320ae5236e8023a619ec4f312b1a3a6b198c9b99119d09f927a9a1a6"
+    "androidUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.1/Nai2API.apk",
+    "androidSha256": "707073a842295dcc492512bdeae6f9bede9fb4256b442e6ce3618730bdfb7f3b"
   },
   "history": [
+    {
+      "version": "1.0.1",
+      "date": "2026-09-23",
+      "title": "Android 预览与保存修复",
+      "content": [
+        "Android 生成图片支持双指放大和缩小，缩放范围为 0.5x 到 6x",
+        "修复 Android 端保存图片到本地不可用问题",
+        "增加系统分享和浏览器下载回退方式"
+      ]
+    },
     {
       "version": "1.0.0",
       "date": "2026-09-23",
