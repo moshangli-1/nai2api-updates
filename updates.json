@@ -1,0 +1,30 @@
+{
+  "product": "Nai2API",
+  "latestVersion": "1.0.0",
+  "updatedAt": "2026-09-23",
+  "current": {
+    "title": "Nai2API 图像工作台上线",
+    "content": [
+      "支持本地预设备份与恢复",
+      "支持风格库剪贴板导入",
+      "支持 NSFW 图片保护",
+      "增加版本迭代与更新公告机制"
+    ],
+    "force": false,
+    "windowsUrl": "",
+    "androidUrl": ""
+  },
+  "history": [
+    {
+      "version": "1.0.0",
+      "date": "2026-09-23",
+      "title": "Nai2API 图像工作台上线",
+      "content": [
+        "支持本地预设备份与恢复",
+        "支持风格库剪贴板导入",
+        "支持 NSFW 图片保护",
+        "增加版本迭代与更新公告机制"
+      ]
+    }
+  ]
+}
