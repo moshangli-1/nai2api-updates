@@ -11,8 +11,8 @@
       "增加版本迭代与更新公告机制"
     ],
     "force": false,
-    "windowsUrl": "",
-    "androidUrl": ""
+    "windowsUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API-Windows.zip",
+    "androidUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API.apk"
   },
   "history": [
     {
