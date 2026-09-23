@@ -12,7 +12,9 @@
     ],
     "force": false,
     "windowsUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API-Windows.zip",
-    "androidUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API.apk"
+    "androidUrl": "https://github.com/moshangli-1/nai2api-updates/releases/download/v1.0.0/Nai2API.apk",
+    "windowsSha256": "1128e9a5ad38a70f35fae5c27cab48df04a19309caf1158e9c016f733d16e6f8",
+    "androidSha256": "d4760313320ae5236e8023a619ec4f312b1a3a6b198c9b99119d09f927a9a1a6"
   },
   "history": [
     {
