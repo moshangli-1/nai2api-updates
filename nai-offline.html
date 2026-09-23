@@ -3601,6 +3601,8 @@ html:has(body.modal-open) {
           <div id="updateNoticeContent" class="update-notice-content"></div>
           <div class="update-notice-actions">
             <button id="checkUpdateBtn" class="primary" type="button">检查更新</button>
+            <button id="downloadUpdateBtn" class="secondary" type="button" hidden>下载更新</button>
+            <button id="cancelUpdateDownloadBtn" class="ghost" type="button" hidden>取消下载</button>
             <span id="updateNoticeStatus" class="muted-text"></span>
           </div>
         </div>
@@ -3891,6 +3893,22 @@ function compareVersions(left, right) {
   return 0;
 }
 
+function validateReleaseUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:'
+      && url.hostname === 'github.com'
+      && /^\/moshangli-1\/nai2api-updates\/releases\/download\/v\d+\.\d+\.\d+\/[^/]+$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSha256(value) {
+  const hash = String(value || '').trim();
+  return /^[a-f\d]{64}$/i.test(hash) ? hash.toLowerCase() : null;
+}
+
 function validateUpdateNotice(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('公告格式无效');
@@ -3913,11 +3931,27 @@ function validateUpdateNotice(value) {
       title,
       content,
       force: Boolean(value.current.force),
-      windowsUrl: String(value.current.windowsUrl || '').trim(),
-      androidUrl: String(value.current.androidUrl || '').trim()
+      windowsUrl: validateReleaseUrl(value.current.windowsUrl) ? String(value.current.windowsUrl).trim() : '',
+      androidUrl: validateReleaseUrl(value.current.androidUrl) ? String(value.current.androidUrl).trim() : '',
+      windowsSha256: normalizeSha256(value.current.windowsSha256),
+      androidSha256: normalizeSha256(value.current.androidSha256)
     },
     history: Array.isArray(value.history) ? value.history : []
   };
+}
+
+function detectUpdatePlatform() {
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) return 'android';
+  if (/Windows/i.test(ua) && window.electronAPI) return 'windows';
+  return 'browser';
+}
+
+function getPlatformUpdate(notice) {
+  const platform = detectUpdatePlatform();
+  if (platform === 'android') return { platform, url: notice.current.androidUrl, sha256: notice.current.androidSha256 };
+  if (platform === 'windows') return { platform, url: notice.current.windowsUrl, sha256: notice.current.windowsSha256 };
+  return { platform, url: '', sha256: null };
 }
 
 function isNewerVersion(version) {
@@ -3969,7 +4003,10 @@ function getUpdateNoticeId(notice) {
 }
 
 function shouldShowUpdateNotice(notice) {
-  if (!notice || !isNewerVersion(notice.latestVersion)) return false;
+  return Boolean(notice && isNewerVersion(notice.latestVersion));
+}
+
+function shouldShowUpdateNoticeNow(notice) {
   return localStorage.getItem(updateNoticeLastSeenKey) !== getUpdateNoticeId(notice);
 }
 
@@ -4238,6 +4275,8 @@ const ids = [
   'updateNoticeContent',
   'updateNoticeStatus',
   'checkUpdateBtn',
+  'downloadUpdateBtn',
+  'cancelUpdateDownloadBtn',
   'libraryCountBadge',
   'libraryDialog',
   'closeLibraryBtn',
@@ -4400,7 +4439,17 @@ async function boot() {
     updateUrlOutputs();
   }).catch(() => {});
   if (state.token) loadMe().catch(() => {});
-  loadUpdateNotice().then((notice) => renderUpdateNotice(notice, false)).catch(() => {});
+  loadUpdateNotice().then(async (notice) => {
+    renderUpdateNotice(notice, false);
+    if (shouldShowUpdateNotice(notice) && shouldShowUpdateNoticeNow(notice)) {
+      const update = getPlatformUpdate(notice);
+      const target = update.url || 'GitHub Releases 页面';
+      if (window.confirm(`发现 Nai2API v${notice.latestVersion} 更新。是否前往“关于与更新”查看并下载？\n\n下载来源：${target}`)) {
+        localStorage.setItem(updateNoticeLastSeenKey, getUpdateNoticeId(notice));
+        openAboutUpdate();
+      }
+    }
+  }).catch(() => {});
 }
 
 function renderUpdateNotice(notice, isChecking = false) {
@@ -4413,9 +4462,94 @@ function renderUpdateNotice(notice, isChecking = false) {
     paragraph.textContent = contentItem;
     el.updateNoticeContent.append(paragraph);
   });
+  const hasUpdate = shouldShowUpdateNotice(notice);
+  const platformUpdate = getPlatformUpdate(notice || builtInUpdateNotice);
+  el.downloadUpdateBtn.hidden = !hasUpdate || !platformUpdate.url;
   el.updateNoticeStatus.textContent = isChecking
-    ? '已完成检查'
-    : (shouldShowUpdateNotice(notice) ? '发现新版本' : `当前版本 v${appVersion} 已是最新`);
+    ? (hasUpdate ? '发现新版本' : '当前已是最新版本')
+    : (hasUpdate ? '发现新版本' : `当前版本 v${appVersion} 已是最新`);
+}
+
+let activeUpdateDownloadController = null;
+
+async function sha256Blob(blob) {
+  if (!globalThis.crypto?.subtle) throw new Error('当前环境不支持文件完整性校验');
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function formatUpdateDownloadProgress(loaded, total) {
+  if (!total || !Number.isFinite(total)) return `已下载 ${formatUpdateBytes(loaded)}`;
+  return `正在下载更新 ${Math.min(100, Math.round(loaded / total * 100))}%（${formatUpdateBytes(loaded)} / ${formatUpdateBytes(total)}）`;
+}
+
+function formatUpdateBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function downloadUpdate() {
+  const notice = readCachedUpdateNotice() || builtInUpdateNotice;
+  const update = getPlatformUpdate(notice);
+  if (!update.url || !validateReleaseUrl(update.url)) {
+    showToast('当前运行环境没有可用的更新安装包', true);
+    return;
+  }
+  if (!window.confirm(`发现 Nai2API v${notice.latestVersion} 更新。现在下载吗？`)) return;
+
+  const controller = new AbortController();
+  activeUpdateDownloadController = controller;
+  el.downloadUpdateBtn.disabled = true;
+  el.cancelUpdateDownloadBtn.hidden = false;
+  el.updateNoticeStatus.textContent = '正在下载更新...';
+  try {
+    const response = await fetch(update.url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`下载失败：HTTP ${response.status}`);
+    const expectedHash = normalizeSha256(update.sha256);
+    if (!expectedHash) throw new Error('更新清单未提供文件校验值，已停止下载以避免安装未验证文件');
+    const total = Number(response.headers.get('content-length')) || 0;
+    const chunks = [];
+    let loaded = 0;
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        el.updateNoticeStatus.textContent = formatUpdateDownloadProgress(loaded, total);
+      }
+    } else {
+      const buffer = await response.arrayBuffer();
+      chunks.push(buffer);
+      loaded = buffer.byteLength;
+    }
+    const blob = new Blob(chunks);
+    const actualHash = await sha256Blob(blob);
+    if (actualHash !== expectedHash) throw new Error('更新文件校验失败，已阻止安装');
+    const extension = update.platform === 'android' ? 'apk' : 'zip';
+    const fileName = `Nai2API-${notice.latestVersion}.${extension}`;
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    el.updateNoticeStatus.textContent = '下载完成，文件校验通过；请按系统提示继续安装';
+    showToast('更新包已下载，请按系统提示继续安装');
+  } catch (error) {
+    if (error.name === 'AbortError') el.updateNoticeStatus.textContent = '已取消更新下载';
+    else {
+      el.updateNoticeStatus.textContent = error.message || '更新下载失败';
+      showToast(el.updateNoticeStatus.textContent, true);
+    }
+  } finally {
+    activeUpdateDownloadController = null;
+    el.downloadUpdateBtn.disabled = false;
+    el.cancelUpdateDownloadBtn.hidden = true;
+  }
 }
 
 async function refreshUpdateNotice(showFeedback = false) {
@@ -4485,6 +4619,8 @@ function bindEvents() {
   el.aboutUpdateBtn.addEventListener('click', openAboutUpdate);
   el.backFromAboutUpdateBtn.addEventListener('click', closeAboutUpdate);
   el.checkUpdateBtn.addEventListener('click', () => refreshUpdateNotice(true));
+  el.downloadUpdateBtn.addEventListener('click', downloadUpdate);
+  el.cancelUpdateDownloadBtn.addEventListener('click', () => activeUpdateDownloadController?.abort());
   el.backToWorkbenchBtn.addEventListener('click', closeStyleLibrary);
   el.styleLibraryFrame.addEventListener('load', handleStyleLibraryFrameLoad);
   el.styleLibraryFrame.addEventListener('error', handleStyleLibraryFrameError);
